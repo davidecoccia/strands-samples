@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'FinOps AI Chatbot - Management Account Cross-Account Role Setup'
+
+Parameters:
+  MemberAccountId:
+    Type: String
+    Description: 'AWS Account ID where the FinOps AI Chatbot will be deployed'
+    AllowedPattern: '[0-9]{12}'
+    ConstraintDescription: 'Must be a valid 12-digit AWS Account ID'
+  
+  TaskRoleName:
+    Type: String
+    Description: 'Name pattern of the ECS Task Role in the member account (optional - uses default pattern if not provided)'
+    Default: 'FinOps-AI-Chatbot-WebappTaskDefTaskRole'
+  
+  CrossAccountRoleName:
+    Type: String
+    Description: 'Name for the cross-account role to be created in this management account'
+    Default: 'FinOpsChatbotCrossAccountRole'
+
+Resources:
+  FinOpsCrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref CrossAccountRoleName
+      Description: 'Cross-account role for FinOps AI Chatbot to access management account billing and cost data'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${MemberAccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringLike:
+                'aws:PrincipalArn': !Sub 'arn:aws:iam::${MemberAccountId}:role/FinOps-AI-Chatbot*'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/job-function/Billing'
+      Policies:
+        - PolicyName: 'FinOpsCostExplorerPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ce:GetCostAndUsage'
+                  - 'ce:GetUsageReport'
+                  - 'ce:GetReservationCoverage'
+                  - 'ce:GetReservationPurchaseRecommendation'
+                  - 'ce:GetReservationUtilization'
+                  - 'ce:GetSavingsPlansUtilization'
+                  - 'ce:GetSavingsPlansUtilizationDetails'
+                  - 'ce:GetSavingsPlansCoverage'
+                  - 'ce:GetDimensionValues'
+                  - 'ce:GetCostCategories'
+                  - 'ce:GetAnomalies'
+                  - 'ce:GetAnomalyDetectors'
+                  - 'ce:GetAnomalyMonitors'
+                  - 'ce:GetAnomalySubscriptions'
+                Resource: '*'
+        - PolicyName: 'FinOpsBudgetsPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'budgets:ViewBudget'
+                  - 'budgets:DescribeBudgets'
+                  - 'budgets:DescribeBudgetPerformanceHistory'
+                Resource: '*'
+        - PolicyName: 'FinOpsComputeOptimizerPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'compute-optimizer:GetRecommendationSummaries'
+                  - 'compute-optimizer:GetEC2InstanceRecommendations'
+                  - 'compute-optimizer:GetEC2RecommendationProjectedMetrics'
+                  - 'compute-optimizer:GetEBSVolumeRecommendations'
+                  - 'compute-optimizer:GetLambdaFunctionRecommendations'
+                  - 'compute-optimizer:GetAutoScalingGroupRecommendations'
+                  - 'compute-optimizer:GetEnrollmentStatus'
+                Resource: '*'
+        - PolicyName: 'FinOpsFreeTierPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'freetier:GetFreeTierUsage'
+                Resource: '*'
+        - PolicyName: 'FinOpsServiceInvestigationPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:Describe*'
+                  - 'rds:Describe*'
+                  - 's3:ListAllMyBuckets'
+                  - 's3:GetBucketLocation'
+                  - 's3:GetBucketTagging'
+                  - 's3:GetBucketVersioning'
+                  - 's3:GetBucketPolicy'
+                  - 's3:GetBucketAcl'
+                  - 's3:GetBucketCors'
+                  - 's3:GetBucketWebsite'
+                  - 's3:GetBucketLogging'
+                  - 's3:GetBucketNotification'
+                  - 's3:GetBucketRequestPayment'
+                  - 'lambda:List*'
+                  - 'lambda:Get*'
+                  - 'iam:List*'
+                  - 'iam:Get*'
+                  - 'cloudformation:Describe*'
+                  - 'cloudformation:List*'
+                  - 'cloudwatch:Describe*'
+                  - 'cloudwatch:Get*'
+                  - 'cloudwatch:List*'
+                  - 'logs:Describe*'
+                  - 'autoscaling:Describe*'
+                  - 'elasticloadbalancing:Describe*'
+                  - 'route53:List*'
+                  - 'route53:Get*'
+                Resource: '*'
+        - PolicyName: 'FinOpsStorageLensPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetStorageLensConfiguration'
+                  - 's3:ListStorageLensConfigurations'
+                  - 's3:GetStorageLensConfigurationTagging'
+                Resource: '*'
+
+Outputs:
+  CrossAccountRoleArn:
+    Description: 'ARN of the cross-account role created for FinOps AI Chatbot'
+    Value: !GetAtt FinOpsCrossAccountRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CrossAccountRoleArn'
+  
+  CrossAccountRoleName:
+    Description: 'Name of the cross-account role created'
+    Value: !Ref FinOpsCrossAccountRole
+    Export:
+      Name: !Sub '${AWS::StackName}-CrossAccountRoleName'
+  
+  MemberAccountId:
+    Description: 'Member account ID that can assume this role'
+    Value: !Ref MemberAccountId
+  
+  NextSteps:
+    Description: 'Next steps to complete the deployment'
+    Value: !Sub |
+      1. Copy the CrossAccountRoleArn: ${FinOpsCrossAccountRole.Arn}
+      2. In member account ${MemberAccountId}, run: cdk deploy -c targetRoleArn=${FinOpsCrossAccountRole.Arn}
+      3. Access your FinOps AI Chatbot via the CloudFront URL from the CDK output
